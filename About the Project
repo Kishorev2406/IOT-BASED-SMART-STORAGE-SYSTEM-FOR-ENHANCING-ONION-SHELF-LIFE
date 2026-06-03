@@ -1,0 +1,54 @@
+IoT-Based Smart Storage System for Enhancing Onion Shelf Life
+Project Overview
+
+This project presents an IoT-based smart storage system designed to improve onion preservation and reduce post-harvest losses. The system continuously monitors critical environmental parameters such as temperature, humidity, and spoilage-related gas concentration using DHT11 and MQ135 sensors connected to an ESP32 microcontroller.
+
+The collected sensor data is transmitted to the ThingsBoard cloud platform through Wi-Fi for real-time monitoring, visualization, and historical analysis. When environmental conditions exceed predefined safety thresholds, an automatic ventilation system is activated through a relay-controlled exhaust fan to maintain optimal storage conditions.
+
+Features
+Real-time temperature and humidity monitoring using DHT11 sensors
+Spoilage gas detection using MQ135 gas sensors
+ESP32-based intelligent control system
+Automatic exhaust fan activation through relay module
+Cloud-based monitoring with ThingsBoard dashboard
+Real-time data visualization and analytics
+Threshold-based decision-making algorithm
+Remote monitoring through IoT connectivity
+Low-cost and scalable agricultural solution
+Hardware Components
+ESP32 Microcontroller
+DHT11 Temperature & Humidity Sensor
+MQ135 Gas Sensor
+Relay Module
+Exhaust Fan
+Power Supply Unit
+Storage Chamber Prototype
+Software & Technologies
+Arduino IDE
+ESP32 Wi-Fi Module
+ThingsBoard IoT Platform
+HTTP Communication Protocol
+Embedded C/C++ Programming
+Working Principle
+
+The system continuously collects environmental data from sensors placed inside the onion storage chamber. The ESP32 processes the sensor readings and compares them with predefined threshold values. If excessive humidity, temperature, or harmful gas levels are detected, the relay module automatically activates the exhaust fan to improve ventilation and restore safe storage conditions. All sensor data is simultaneously uploaded to the ThingsBoard cloud platform for remote monitoring and analysis.
+
+Benefits
+Reduces onion spoilage and wastage
+Extends onion shelf life
+Minimizes post-harvest losses
+Improves storage efficiency
+Supports smart agriculture practices
+Reduces manual monitoring efforts
+Provides real-time environmental insights
+Enhances decision-making through cloud analytics
+Future Scope
+Integration of AI-based spoilage prediction
+Mobile application for remote alerts
+SMS and email notification system
+Solar-powered operation
+Multi-crop storage monitoring support
+Advanced environmental control mechanisms
+Outcome
+
+The developed system successfully demonstrated real-time monitoring, automated ventilation control, and cloud-based visualization, providing an efficient and cost-effective solution for smart agricultural storage management.
