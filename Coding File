@@ -1,0 +1,195 @@
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include "DHT.h"
+
+// =========================
+// WiFi & ThingsBoard Setup
+// =========================
+const char* ssid     = "K";           // <-- your WiFi name
+const char* password = "12345678";    // <-- your WiFi password
+// Replace token if you change your device on ThingsBoard:
+const char* serverName = "http://thingsboard.cloud/api/v1/hq4vxon5djgdvaciedjg/telemetry";
+
+// =========================
+// Sensor Pin Configuration
+// =========================
+#define DHTPIN1   15
+#define DHTPIN2   4
+#define DHTTYPE   DHT11
+
+#define MQ135_1   34   // ADC1 pins on ESP32 (good choice)
+#define MQ135_2   35
+
+// Relay pin
+#define RELAY_PIN 14    // Make sure this matches your wiring
+
+// =========================
+// Thresholds (edit if needed)
+// =========================
+const float TEMP_HIGH_C       = 35.0;
+const float HUMID_HIGH_PCT    = 70.0;
+const int   GAS_HIGH_RAW      = 1000;  // Adjust after checking your MQ135 readings
+
+
+// Read/Send intervals
+const unsigned long LOOP_INTERVAL_MS   = 5000;   // 5s between reads/posts
+const unsigned long WIFI_CHECK_MS      = 10000;  // 10s WiFi health check
+
+// =========================
+// Objects
+// =========================
+DHT dht1(DHTPIN1, DHTTYPE);
+DHT dht2(DHTPIN2, DHTTYPE);
+
+// Timing
+unsigned long lastLoopMs   = 0;
+unsigned long lastWifiMs   = 0;
+
+// Cached values
+float temperature1 = NAN, humidity1 = NAN;
+float temperature2 = NAN, humidity2 = NAN;
+int gasValue1 = 0, gasValue2 = 0;
+bool fanOn = false;
+
+// =========================
+// Helpers
+// =========================
+void connectWiFi() {
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+  Serial.print("Connecting to WiFi");
+  unsigned long start = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - start < 20000) {
+    delay(400);
+    Serial.print(".");
+  }
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\n✅ WiFi connected!");
+    Serial.print("IP Address: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.println("\n⚠ WiFi connect timeout. Will retry in background.");
+  }
+}
+
+void ensureWiFi() {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("🔄 Reconnecting WiFi...");
+    WiFi.disconnect(true);
+    delay(200);
+    connectWiFi();
+  }
+}
+
+float safeReadTemp(DHT& d) {
+  float t = d.readTemperature();
+  if (isnan(t)) return NAN;
+  return t;
+}
+
+float safeReadHum(DHT& d) {
+  float h = d.readHumidity();
+  if (isnan(h)) return NAN;
+  return h;
+}
+
+void controlFan(bool on) {
+  // NOTE: Many relay boards are active-LOW. Your original code used HIGH = ON.
+  // If your fan behaves inverted, swap HIGH/LOW here.
+  digitalWrite(RELAY_PIN, on ? HIGH : LOW);
+  fanOn = on;
+}
+
+
+void postTelemetry() {
+  if (WiFi.status() != WL_CONNECTED) return;
+
+  HTTPClient http;
+
+  String json = "{";
+  json += "\"temperature1\":" + String(temperature1, 2) + ",";
+  json += "\"humidity1\":"    + String(humidity1, 2) + ",";
+  json += "\"temperature2\":" + String(temperature2, 2) + ",";
+  json += "\"humidity2\":"    + String(humidity2, 2) + ",";
+  json += "\"gasValue1\":"    + String(gasValue1) + ",";
+  json += "\"gasValue2\":"    + String(gasValue2) + ",";
+  json += "\"fanStatus\":\""  + String(fanOn ? "ON" : "OFF") + "\"";
+  json += "}";
+
+  http.begin(serverName);
+  http.addHeader("Content-Type", "application/json");
+  int code = http.POST(json);
+
+  Serial.print("📤 POST -> ");
+  Serial.print(code);
+  Serial.print(" | Payload: ");
+  Serial.println(json);
+
+  http.end();
+}
+
+// =========================
+// Setup
+// =========================
+void setup() {
+  Serial.begin(115200);
+  delay(300);
+
+  dht1.begin();
+  dht2.begin();
+
+  pinMode(RELAY_PIN, OUTPUT);
+  controlFan(false); // Fan OFF initially
+
+  connectWiFi();
+}
+
+// =========================
+// Main Loop
+// =========================
+void loop() {
+  unsigned long now = millis();
+
+  // Periodic WiFi check
+  if (now - lastWifiMs >= WIFI_CHECK_MS) {
+    lastWifiMs = now;
+    ensureWiFi();
+  }
+
+  // Run every LOOP_INTERVAL_MS
+  if (now - lastLoopMs < LOOP_INTERVAL_MS) return;
+  lastLoopMs = now;
+
+  // ---- Read Sensors ----
+  temperature1 = safeReadTemp(dht1);
+  humidity1    = safeReadHum(dht1);
+  temperature2 = safeReadTemp(dht2);
+  humidity2    = safeReadHum(dht2);
+
+  gasValue1 = analogRead(MQ135_1);
+  gasValue2 = analogRead(MQ135_2);
+
+  // Replace NaNs with defaults
+  if (isnan(temperature1)) temperature1 = -999;
+  if (isnan(humidity1))    humidity1    = -1;
+  if (isnan(temperature2)) temperature2 = -999;
+  if (isnan(humidity2))    humidity2    = -1;
+
+  // ---- Decide Fan ----
+  bool highTemp     = (temperature1 > TEMP_HIGH_C) || (temperature2 > TEMP_HIGH_C);
+  bool highHumidity = (humidity1    > HUMID_HIGH_PCT) || (humidity2 > HUMID_HIGH_PCT);
+  bool highGas      = (gasValue1    > GAS_HIGH_RAW) || (gasValue2 > GAS_HIGH_RAW);
+
+  bool shouldFanOn = (highTemp || highHumidity || highGas);
+  controlFan(shouldFanOn);
+
+  // ---- Log to Serial ----
+  Serial.println("================================");
+  Serial.print("Temp1: "); Serial.print(temperature1); Serial.print(" °C | Hum1: "); Serial.println(humidity1);
+  Serial.print("Temp2: "); Serial.print(temperature2); Serial.print(" °C | Hum2: "); Serial.println(humidity2);
+  Serial.print("Gas1: ");  Serial.println(gasValue1);
+  Serial.print("Gas2: ");  Serial.println(gasValue2);
+  Serial.print("Fan: ");   Serial.println(fanOn ? "ON" : "OFF");
+  // ---- Send to ThingsBoard ----
+  postTelemetry();
+}
